@@ -19,8 +19,10 @@ app.UseRouting();
 
 // Live update hubs
 app.MapHub<MaintenanceHub>("/hubs/maintenance");
+app.MapHub<ChatHub>("/hubs/chat");
 
 // Internal endpoints for API/Worker push
 app.MapInternalMaintenanceEndpoints();
+app.MapInternalChatEndpoints();
 
 app.Run();
