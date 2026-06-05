@@ -24,5 +24,6 @@ app.MapHub<ChatHub>("/hubs/chat");
 // Internal endpoints for API/Worker push
 app.MapInternalMaintenanceEndpoints();
 app.MapInternalChatEndpoints();
+app.MapInternalDocumentEndpoints();
 
 app.Run();
