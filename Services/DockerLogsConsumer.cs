@@ -74,9 +74,12 @@ public sealed class DockerLogsConsumer(
             return MessageDisposition.NackDiscard;
 
         var group = DockerSignalRSchema.LogsGroupPrefix + msg.SubscriptionId;
+        logger.LogDebug("[DOCKER-SIGNALR-LOGS] Received line sub={Sub} svc={Svc} → group={Group}",
+            msg.SubscriptionId, msg.ServiceId, group);
         try
         {
             await hubContext.Clients.Group(group).SendAsync(DockerSignalRSchema.EventLogLine, msg, ct);
+            logger.LogDebug("[DOCKER-SIGNALR-LOGS] Forwarded line to group {Group}", group);
             return MessageDisposition.Ack;
         }
         catch (Exception ex)
