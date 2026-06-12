@@ -20,6 +20,8 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 builder.Services.AddSingleton<DockerSignalRMetrics>();
 builder.Services.AddSingleton<DockerSignalRCacheReader>();
 builder.Services.AddHostedService<DockerInventoryConsumer>();
+builder.Services.AddHostedService<DockerProgressConsumer>();
+builder.Services.AddHostedService<DockerLogsConsumer>();
 
 var app = builder.Build();
 

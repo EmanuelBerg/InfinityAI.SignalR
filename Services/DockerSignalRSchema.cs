@@ -7,14 +7,27 @@ public static class DockerSignalRSchema
     // Physical Redis key — must match DockerCacheKeys.StacksAll in InfinityAI.Docker (controlled duplication).
     public const string StacksAllKey = "infinity:docker:stacks:all";
 
-    // SignalR group that all Docker-subscribed connections join.
-    public const string DockerServicesGroup = "docker:services";
+    // SignalR groups
+    public const string DockerServicesGroup  = "docker:services";
+    public const string OperationGroupPrefix = "docker:ops:";
+    public const string LogsGroupPrefix      = "docker:logs:";
 
-    // Event names — server → browser.
+    // Events — inventory (server → browser)
     public const string EventStackSnapshot = "docker:stack_snapshot";
     public const string EventServiceState  = "docker:service_state";
 
-    // RabbitMQ queue consumed by DockerInventoryConsumer.
-    // Declared by InfinityAI.Api RabbitMqTopologyInitializer — this service only consumes.
-    public const string ConsumerQueueName = "signalr.docker.inventory";
+    // Events — operations
+    public const string EventOperationProgress = "docker:operation_progress";
+    public const string EventOperationCompleted = "docker:operation_completed";
+    public const string EventOperationFailed    = "docker:operation_failed";
+
+    // Events — logs
+    public const string EventLogLine    = "docker:log_line";
+    public const string EventLogStopped = "docker:log_stopped";
+    public const string EventLogError   = "docker:log_error";
+
+    // RabbitMQ queues (declared by InfinityAI.Api, consumed here)
+    public const string ConsumerQueueName         = "signalr.docker.inventory";
+    public const string ProgressConsumerQueueName = "signalr.docker.progress";
+    public const string LogsConsumerQueueName     = "signalr.docker.logs";
 }
