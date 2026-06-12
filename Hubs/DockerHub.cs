@@ -24,14 +24,16 @@ public sealed class DockerHub(
             if (providedKey != requiredKey)
             {
                 logger.LogWarning(
-                    "[SIGNALR] DockerHub connection rejected — invalid or missing InternalKey. ConnectionId={ConnectionId}, RemoteIp={Ip}",
+                    "[DOCKER-HUB] Connection {ConnectionId} rejected — KeyPresent={KeyPresent} RemoteIp={Ip}",
                     Context.ConnectionId,
+                    !string.IsNullOrEmpty(providedKey),
                     httpContext?.Connection.RemoteIpAddress);
                 Context.Abort();
                 return;
             }
         }
 
+        logger.LogInformation("[DOCKER-HUB] Connection {ConnectionId} accepted", Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
@@ -92,7 +94,7 @@ public sealed class DockerHub(
     {
         var group = DockerSignalRSchema.LogsGroupPrefix + subscriptionId;
         await Groups.AddToGroupAsync(Context.ConnectionId, group);
-        logger.LogDebug("[DOCKER-SIGNALR] {ConnectionId} subscribed to {Group}", Context.ConnectionId, group);
+        logger.LogInformation("[DOCKER-HUB] {ConnectionId} joined {Group}", Context.ConnectionId, group);
     }
 
     public async Task UnsubscribeDockerLogs(string subscriptionId)
