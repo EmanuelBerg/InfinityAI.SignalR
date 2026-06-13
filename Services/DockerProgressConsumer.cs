@@ -5,6 +5,7 @@ using InfinityAI.SignalR.Models.Docker;
 using Microsoft.AspNetCore.SignalR;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 
 namespace InfinityAI.SignalR.Services;
 
@@ -26,38 +27,73 @@ public sealed class DockerProgressConsumer(
         var port    = int.TryParse(configuration["RabbitMQPort"], out var p) ? p : 5672;
         var factory = new ConnectionFactory { HostName = server, Port = port, AutomaticRecoveryEnabled = true };
 
-        IConnection? connection = null;
-        while (!stoppingToken.IsCancellationRequested && connection is null)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            try { connection = await factory.CreateConnectionAsync(stoppingToken); }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // ── Phase 1: establish connection ──────────────────────────────────
+            IConnection? connection = null;
+            while (!stoppingToken.IsCancellationRequested && connection is null)
             {
-                logger.LogWarning("[DOCKER-PROGRESS-SIGNALR] RabbitMQ unavailable ({Msg}), retrying in 10s", ex.Message);
-                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-            }
-        }
-
-        if (connection is null) return;
-        await using (connection)
-        {
-            await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
-            await channel.BasicQosAsync(0, 10, false, stoppingToken);
-
-            var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.ReceivedAsync += async (_, ea) =>
-            {
-                var disposition = await HandleReceivedAsync(ea.Body.ToArray(), stoppingToken);
-                switch (disposition)
+                try { connection = await factory.CreateConnectionAsync(stoppingToken); }
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    case MessageDisposition.Ack:        await channel.BasicAckAsync(ea.DeliveryTag, false); break;
-                    case MessageDisposition.NackDiscard: await channel.BasicNackAsync(ea.DeliveryTag, false, false); break;
-                    case MessageDisposition.NackRequeue: await channel.BasicNackAsync(ea.DeliveryTag, false, true); break;
+                    logger.LogWarning("[DOCKER-PROGRESS-SIGNALR] RabbitMQ unavailable ({Msg}), retrying in 10s", ex.Message);
+                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
                 }
-            };
+            }
+            if (connection is null) return;
 
-            await channel.BasicConsumeAsync(QueueName, autoAck: false, consumer: consumer, stoppingToken);
-            logger.LogInformation("[DOCKER-PROGRESS-SIGNALR] Listening on '{Queue}'", QueueName);
-            try { await Task.Delay(Timeout.Infinite, stoppingToken); } catch (OperationCanceledException) { }
+            // ── Phase 2: channel + consume loop (retry on missing topology) ────
+            await using (connection)
+            {
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    IChannel? channel = null;
+                    try
+                    {
+                        channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+                        await channel.BasicQosAsync(0, 10, false, stoppingToken);
+
+                        var consumer = new AsyncEventingBasicConsumer(channel);
+                        consumer.ReceivedAsync += async (_, ea) =>
+                        {
+                            var disposition = await HandleReceivedAsync(ea.Body.ToArray(), stoppingToken);
+                            switch (disposition)
+                            {
+                                case MessageDisposition.Ack:         await channel.BasicAckAsync(ea.DeliveryTag, false); break;
+                                case MessageDisposition.NackDiscard: await channel.BasicNackAsync(ea.DeliveryTag, false, false); break;
+                                case MessageDisposition.NackRequeue: await channel.BasicNackAsync(ea.DeliveryTag, false, true); break;
+                            }
+                        };
+
+                        // Throws OperationInterruptedException(404) if queue not declared yet.
+                        await channel.BasicConsumeAsync(QueueName, autoAck: false, consumer: consumer, stoppingToken);
+                        logger.LogInformation("[DOCKER-PROGRESS-SIGNALR] Listening on '{Queue}'", QueueName);
+
+                        // AutomaticRecovery handles connection drops transparently.
+                        await Task.Delay(Timeout.Infinite, stoppingToken);
+                    }
+                    catch (OperationCanceledException) { return; }
+                    catch (Exception ex) when (IsTopologyNotReady(ex))
+                    {
+                        logger.LogWarning(
+                            "[STARTUP-WAIT] RabbitMQ topology not ready; queue {Queue} missing. " +
+                            "Waiting for InfinityAI.Api to declare topology.",
+                            QueueName);
+                        try { await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken); }
+                        catch (OperationCanceledException) { return; }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning("[DOCKER-PROGRESS-SIGNALR] Channel/connection error ({Msg}) — reconnecting", ex.Message);
+                        break; // exit inner loop → dispose connection → outer loop reconnects
+                    }
+                    finally
+                    {
+                        if (channel is not null)
+                            try { await channel.DisposeAsync(); } catch { }
+                    }
+                }
+            }
         }
     }
 
@@ -94,4 +130,9 @@ public sealed class DockerProgressConsumer(
             return MessageDisposition.NackRequeue;
         }
     }
+
+    // Returns true when the exception indicates that the queue doesn't exist yet —
+    // meaning InfinityAI.Api hasn't declared RabbitMQ topology yet.
+    internal static bool IsTopologyNotReady(Exception ex) =>
+        ex is OperationInterruptedException oie && oie.ShutdownReason?.ReplyCode == 404;
 }
