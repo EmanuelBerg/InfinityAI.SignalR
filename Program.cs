@@ -13,8 +13,13 @@ builder.Services.AddSignalR();
 
 // Redis — for snapshot-on-subscribe in DockerHub.
 var redisConnectionString = builder.Configuration["RedisConnectionString"] ?? "localhost:6379";
-builder.Services.AddSingleton<IConnectionMultiplexer>(
-    ConnectionMultiplexer.Connect(redisConnectionString));
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var opts = ConfigurationOptions.Parse(redisConnectionString);
+    opts.AbortOnConnectFail = false;
+    opts.ConnectRetry = 5;
+    return ConnectionMultiplexer.Connect(opts);
+});
 
 // Docker SignalR services.
 builder.Services.AddSingleton<DockerSignalRMetrics>();
@@ -40,5 +45,8 @@ app.MapHub<DockerHub>("/hubs/docker");
 app.MapInternalMaintenanceEndpoints();
 app.MapInternalChatEndpoints();
 app.MapInternalDocumentEndpoints();
+
+// Health check for Docker Swarm healthchecks
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 
 app.Run();
