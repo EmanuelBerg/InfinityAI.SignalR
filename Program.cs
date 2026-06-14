@@ -27,6 +27,7 @@ builder.Services.AddSingleton<DockerSignalRCacheReader>();
 builder.Services.AddHostedService<DockerInventoryConsumer>();
 builder.Services.AddHostedService<DockerProgressConsumer>();
 builder.Services.AddHostedService<DockerLogsConsumer>();
+builder.Services.AddHostedService<DockerHostMetricsConsumer>();
 
 var app = builder.Build();
 

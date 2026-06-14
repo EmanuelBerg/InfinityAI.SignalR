@@ -26,8 +26,15 @@ public static class DockerSignalRSchema
     public const string EventLogStopped = "docker:log_stopped";
     public const string EventLogError   = "docker:log_error";
 
+    // SignalR group — host metrics
+    public const string DockerHostGroup = "docker:host";
+
+    // Events — host metrics (server → browser)
+    public const string EventHostMetrics = "docker:host_metrics";
+
     // RabbitMQ queues (declared by InfinityAI.Api, consumed here)
     public const string ConsumerQueueName         = "signalr.docker.inventory";
     public const string ProgressConsumerQueueName = "signalr.docker.progress";
     public const string LogsConsumerQueueName     = "signalr.docker.logs";
+    public const string HostMetricsQueueName      = "signalr.docker.host";
 }

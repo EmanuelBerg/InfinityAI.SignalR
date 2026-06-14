@@ -102,4 +102,20 @@ public sealed class DockerHub(
         var group = DockerSignalRSchema.LogsGroupPrefix + subscriptionId;
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
     }
+
+    public async Task SubscribeDockerHost()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, DockerSignalRSchema.DockerHostGroup);
+        logger.LogInformation(
+            "[DOCKER-SIGNALR] Connection {ConnectionId} subscribed to {Group}",
+            Context.ConnectionId, DockerSignalRSchema.DockerHostGroup);
+    }
+
+    public async Task UnsubscribeDockerHost()
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, DockerSignalRSchema.DockerHostGroup);
+        logger.LogInformation(
+            "[DOCKER-SIGNALR] Connection {ConnectionId} unsubscribed from {Group}",
+            Context.ConnectionId, DockerSignalRSchema.DockerHostGroup);
+    }
 }
