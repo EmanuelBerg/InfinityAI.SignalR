@@ -14,10 +14,13 @@ public static class InternalMaintenanceEndpoints
             MaintenanceJobUpdatedPayload payload,
             IHubContext<MaintenanceHub> hub,
             IConfiguration config,
+            ILoggerFactory loggerFactory,
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (!IsAuthorized(ctx, config)) return Results.Unauthorized();
+            var logger = loggerFactory.CreateLogger("InfinityAI.SignalR.Internal");
+            if (!InternalKeyGuard.IsAuthorized(ctx, config, logger))
+                return Results.Unauthorized();
 
             await hub.Clients.All.SendAsync("MaintenanceJobUpdated", payload, ct);
             return Results.Ok();
@@ -27,26 +30,18 @@ public static class InternalMaintenanceEndpoints
             MaintenanceStatusPayload payload,
             IHubContext<MaintenanceHub> hub,
             IConfiguration config,
+            ILoggerFactory loggerFactory,
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (!IsAuthorized(ctx, config)) return Results.Unauthorized();
+            var logger = loggerFactory.CreateLogger("InfinityAI.SignalR.Internal");
+            if (!InternalKeyGuard.IsAuthorized(ctx, config, logger))
+                return Results.Unauthorized();
 
             await hub.Clients.All.SendAsync("MaintenanceStatusUpdated", payload, ct);
             return Results.Ok();
         });
 
         return app;
-    }
-
-    private static bool IsAuthorized(HttpContext ctx, IConfiguration config)
-    {
-        var requiredKey = config["SignalR:InternalKey"];
-
-        // If no key configured: allow (dev/internal-network mode, log warning handled at startup)
-        if (string.IsNullOrWhiteSpace(requiredKey)) return true;
-
-        ctx.Request.Headers.TryGetValue("X-SignalR-Internal-Key", out var providedKey);
-        return providedKey == requiredKey;
     }
 }

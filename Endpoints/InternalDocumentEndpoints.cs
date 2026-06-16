@@ -14,10 +14,13 @@ public static class InternalDocumentEndpoints
             DocumentProgressPayload payload,
             IHubContext<ChatHub> hub,
             IConfiguration config,
+            ILoggerFactory loggerFactory,
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (!IsAuthorized(ctx, config)) return Results.Unauthorized();
+            var logger = loggerFactory.CreateLogger("InfinityAI.SignalR.Internal");
+            if (!InternalKeyGuard.IsAuthorized(ctx, config, logger))
+                return Results.Unauthorized();
 
             if (payload.UserId.HasValue)
                 await hub.Clients.Group($"chat:user:{payload.UserId}").SendAsync("ReceiveDocumentProgress", payload, ct);
@@ -26,13 +29,5 @@ public static class InternalDocumentEndpoints
         });
 
         return app;
-    }
-
-    private static bool IsAuthorized(HttpContext ctx, IConfiguration config)
-    {
-        var requiredKey = config["SignalR:InternalKey"];
-        if (string.IsNullOrWhiteSpace(requiredKey)) return true;
-        ctx.Request.Headers.TryGetValue("X-SignalR-Internal-Key", out var providedKey);
-        return providedKey == requiredKey;
     }
 }
