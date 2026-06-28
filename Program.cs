@@ -14,6 +14,11 @@ builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 builder.Services.AddSignalR();
 
+// Forwards hub connection-security events to the API's unified SecurityAuditEvent store.
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<InfinityAI.SignalR.Services.ISecurityEventForwarder,
+                              InfinityAI.SignalR.Services.SecurityEventForwarder>();
+
 // SECURE-BY-DEFAULT: authenticate every connection/request with the SignalR internal key
 // (query string for hubs, header for /internal push endpoints) and require it via a fallback
 // policy. Permissive when SignalR:InternalKey is unset (dev), matching the existing hub checks.

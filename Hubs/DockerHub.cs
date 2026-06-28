@@ -11,6 +11,7 @@ public sealed class DockerHub(
     IConfiguration configuration,
     DockerSignalRCacheReader cacheReader,
     DockerSignalRMetrics metrics,
+    Services.ISecurityEventForwarder securityEvents,
     ILogger<DockerHub> logger) : Hub
 {
     public override async Task OnConnectedAsync()
@@ -28,12 +29,22 @@ public sealed class DockerHub(
                     Context.ConnectionId,
                     !string.IsNullOrEmpty(providedKey),
                     httpContext?.Connection.RemoteIpAddress);
+                // Admin (Docker) hub denial — highest-severity SignalR security event.
+                await securityEvents.ForwardAsync("signalr.adminhub.denied", "DockerHub",
+                    Context.ConnectionId, httpContext?.Request.Query["userId"],
+                    httpContext?.Connection.RemoteIpAddress?.ToString(),
+                    httpContext?.Request.Headers.UserAgent.ToString(),
+                    string.IsNullOrEmpty(providedKey) ? "missing internal key" : "invalid internal key");
                 Context.Abort();
                 return;
             }
         }
 
         logger.LogInformation("[DOCKER-HUB] Connection {ConnectionId} accepted", Context.ConnectionId);
+        await securityEvents.ForwardAsync("signalr.connection.established", "DockerHub",
+            Context.ConnectionId, httpContext?.Request.Query["userId"],
+            httpContext?.Connection.RemoteIpAddress?.ToString(),
+            httpContext?.Request.Headers.UserAgent.ToString(), null);
         await base.OnConnectedAsync();
     }
 
